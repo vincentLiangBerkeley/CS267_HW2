@@ -3,7 +3,19 @@
 void init_grid(int num_bins, bin_t *bin_list)
 {
     for(int i = 0; i < num_bins; i ++)
+    {
+        bin_list[i].capacity = 10;
+        bin_list[i].bin_size = 0;
+        // printf("capacity = %d\n", bin_list[i].capacity);
         bin_list[i].indeces = (int*)malloc(bin_list[i].capacity*sizeof(int));
+    }
+       
+}
+
+void clear_grid(int num_bins, bin_t *bin_list)
+{
+    for(int i = 0; i < num_bins; i ++)
+        free(bin_list[i].indeces);
 }
 
 // The list of bins will be separated into y*x
@@ -43,7 +55,7 @@ void bin_particles(int n, particle_t *particles, int num_bins, bin_t *bin_list, 
         bin_list[index].indeces[bin_list[index].bin_size] = i;
         bin_list[index].bin_size += 1;
 
-        if (bin_list[index].bin_size > 20) printf("Warning more than 20 particles in this bin.\n");
+        // if (bin_list[index].bin_size > 10) printf("Warning more than 10 particles in this bin.\n");
     }
 }
 

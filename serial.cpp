@@ -140,6 +140,7 @@ int main( int argc, char **argv )
     if( fsum )
         fclose( fsum );    
     free( particles );
+    clear_grid(num_bins, bin_list);
     free(bin_list);
     if( fsave )
         fclose( fsave );

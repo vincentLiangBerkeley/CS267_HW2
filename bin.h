@@ -9,8 +9,8 @@
 typedef struct
 {
     int* indeces;
-    int bin_size=0;
-    int capacity=20;
+    int bin_size;
+    int capacity;
 }bin_t;
 
 // This function will allocate initial memory for each bin
@@ -20,5 +20,5 @@ void set_grid_size(int &x, int &y, int num_bins);
 void bin_particles(int n, particle_t *particles, int num_bins, bin_t *bin_list, double bin_x, double bin_y, int num_rows);
 // Called only when debugging
 void sanity_check(int n, int num_bins, bin_t *bin_list);
-
+void clear_grid(int num_bins, bin_t *bin_list);
 #endif
