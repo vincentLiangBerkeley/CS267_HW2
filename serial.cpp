@@ -3,70 +3,9 @@
 #include <assert.h>
 #include <math.h>
 #include "common.h"
-#include <iostream>
+#include "bin.h"
 
 #define DEBUG 0
-
-typedef struct
-{
-    int indeces[20];
-    int bin_size;
-}bin_t;
-
-// The list of bins will be separated into y*x
-void set_bin_size(int &x, int &y, int num_bins)
-{
-    int m = static_cast<int>(sqrt(num_bins));
-    for(int i=m; i>0; i --)
-    {
-        if(num_bins % i == 0) 
-        {
-            y = i;
-            break;
-        }
-    }
-
-    x = num_bins / y;
-}
-
-// The size of the global board is known from outside of this file
-void allocate_bins(int n, particle_t *particles, int num_bins, bin_t *bin_list, double bin_x, double bin_y, int num_rows)
-{
-    int i;
-    for(i=0;i<num_bins;i++) bin_list[i].bin_size = 0;
-    // Binning particles to bins
-    for(i=0;i<n;i++)
-    {
-        int x = particles[i].x / bin_x, y = particles[i].y / bin_y;
-        bin_list[y+x*num_rows].indeces[bin_list[y+x*num_rows].bin_size] = i;
-        bin_list[y+x*num_rows].bin_size += 1;
-        if (bin_list[y+x*num_rows].bin_size > 20) printf("Warning more than 10 particles in this bin.\n");
-    }
-}
-
-void sanity_check(int n, int num_bins, bin_t *bin_list)
-{
-    int sum = 0;
-    for(int i = 0; i < num_bins; i ++)
-    {
-        // if(bin_list[i].bin_size > 2)
-        //     printf("bin # %d has %d particles\n", i, bin_list[i].bin_size);
-        sum += bin_list[i].bin_size;
-    }
-    
-    if(sum == n) printf("The total number of particles is unchanged.\n");
-    else printf("Sum = %d, n = %d\n", sum, n);
-}
-
-void clear_bins(int num_bins, bin_t *bin_list)
-{
-    for(int i = 0; i < num_bins; i ++)
-    {
-        for(int j = 0; j < bin_list[i].bin_size; j ++)
-            bin_list[i].indeces[j] = -1;
-        bin_list[i].bin_size = 0;
-    }
-}
 
 //
 //  benchmarking program
@@ -103,15 +42,14 @@ int main( int argc, char **argv )
     int bin_i, bin_j, num_bins = n % 4 == 0 ? n/4:n/4+1;
     bin_t *bin_list = (bin_t*) malloc(num_bins * sizeof(bin_t));
     if (DEBUG) printf("Testing initializing bins: \n");
-    set_bin_size(bin_i, bin_j, num_bins);
+    set_grid_size(bin_i, bin_j, num_bins);
     if (DEBUG) printf("There are %d bins, %d per row with %d rows.\n", num_bins, bin_i, bin_j);
     double bin_x = grid_size / bin_i, bin_y = grid_size / bin_j;
     if (DEBUG) printf("The bins are of size %f by %f, err = %f\n", bin_y, bin_x, bin_x*bin_y*num_bins - grid_size*grid_size);
-    allocate_bins(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
+    init_grid(num_bins, bin_list);
+    bin_particles(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
+    //sanity_check(n, num_bins, bin_list);
 
-    
-
-    
     //
     //  simulate a number of time steps
     //
@@ -123,14 +61,8 @@ int main( int argc, char **argv )
        davg = 0.0;
 	   dmin = 1.0;
         //
-        //  compute forces, this is where the bin
+        //  compute forces, this is where the bins come in
         //
-    //     for( int i = 0; i < n; i++ )
-    //     {
-    //         particles[i].ax = particles[i].ay = 0;
-    //         for (int j = 0; j < n; j++ )
-				// apply_force( particles[i], particles[j],&dmin,&davg,&navg);
-    //     }
 
         for(int i = 0; i < n; i++)
         {
@@ -144,10 +76,7 @@ int main( int argc, char **argv )
                     bin_t neighbor = bin_list[r + c*bin_j];
                     //printf("Neighbor index = %d with size: %d\n", r+c*bin_j, neighbor.bin_size);
                     for(int j = 0; j < neighbor.bin_size; j ++)
-                    {
-                        apply_force(particles[i], particles[neighbor.indeces[j]], &dmin, &davg, &navg);
-                    }
-                        
+                        apply_force(particles[i], particles[neighbor.indeces[j]], &dmin, &davg, &navg);    
                 }
             }
         }
@@ -158,7 +87,7 @@ int main( int argc, char **argv )
         for( int i = 0; i < n; i++ ) 
             move( particles[i] );		
 
-        allocate_bins(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
+        bin_particles(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
         if (DEBUG) sanity_check(n, num_bins, bin_list);
     
         if( find_option( argc, argv, "-no" ) == -1 )
