@@ -21,4 +21,6 @@ void bin_particles(int n, particle_t *particles, int num_bins, bin_t *bin_list, 
 // Called only when debugging
 void sanity_check(int n, int num_bins, bin_t *bin_list);
 void clear_grid(int num_bins, bin_t *bin_list);
+void add_particle(bin_t *bin_list, int i, int j);
+void remove_particle(bin_t *bin_list, int i, int j);
 #endif

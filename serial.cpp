@@ -85,7 +85,16 @@ int main( int argc, char **argv )
         //  move particles
         //
         for( int i = 0; i < n; i++ ) 
-            move( particles[i] );		
+        {   
+            int r_old = particles[i].y / bin_y, c_old = particles[i].x / bin_x;
+            move( particles[i] );
+            int r = particles[i].y / bin_y, c = particles[i].x / bin_x;
+            if (r != r_old || c != c_old)
+            {
+                add_particle(bin_list, i, r + c*bin_j);
+                remove_particle(bin_list, i, r_old + c_old*bin_j);
+            }
+        }	
 
         bin_particles(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
         if (DEBUG) sanity_check(n, num_bins, bin_list);

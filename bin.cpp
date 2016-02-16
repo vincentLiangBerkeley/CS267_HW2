@@ -45,19 +45,39 @@ void bin_particles(int n, particle_t *particles, int num_bins, bin_t *bin_list, 
     {   
         int x = particles[i].x / bin_x, y = particles[i].y / bin_y;
         int index = y+x*num_rows;
-        if (bin_list[index].bin_size == bin_list[index].capacity)
-            // Need to allocate more memory here
-        {
-            printf("Reallocating memory to bin # %d\n", index);
-            bin_list[index].indeces = (int*) realloc(bin_list[index].indeces, 2*bin_list[index].capacity*sizeof(int));
-            bin_list[index].capacity  *= 2;
-        }
-        bin_list[index].indeces[bin_list[index].bin_size] = i;
-        bin_list[index].bin_size += 1;
-
-        // if (bin_list[index].bin_size > 10) printf("Warning more than 10 particles in this bin.\n");
+        add_particle(bin_list, i, index);
     }
 }
+
+// This function adds a particle to the end of a bin
+void add_particle(bin_t *bin_list, int i, int j)
+{ 
+    if (bin_list[j].bin_size == bin_list[j].capacity)
+        // Need to allocate more memory here
+    {
+        // printf("Reallocating memory to bin # %d\n", j);
+        bin_list[j].indeces = (int*) realloc(bin_list[j].indeces, 2*bin_list[j].capacity*sizeof(int));
+        bin_list[j].capacity  *= 2;
+    }
+
+    bin_list[j].indeces[bin_list[j].bin_size] = i;
+    bin_list[j].bin_size ++;
+}
+
+void remove_particle(bin_t *bin_list, int i, int j)
+{
+    for (int k = 0; k < bin_list[j].bin_size; k++)
+    {
+        if (bin_list[j].indeces[k] == i) // Need to remove this particle
+        {
+            for (int l = k; l < bin_list[j].bin_size; l ++)
+                bin_list[j].indeces[l] = bin_list[j].indeces[l+1];
+        }
+    }
+
+    bin_list[j].bin_size --;
+}
+
 
 void sanity_check(int n, int num_bins, bin_t *bin_list)
 {
