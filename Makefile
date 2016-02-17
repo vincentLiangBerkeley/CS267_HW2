@@ -3,7 +3,7 @@
 #
 # Intel Compilers are loaded by default; for other compilers please check the module list
 #
-CC = CC
+CC = gcc-4.9
 MPCC = CC
 OPENMP = -fopenmp  #Note: this is the flag for Intel compilers. Change this to -fopenmp for GNU compilers. See http://www.nersc.gov/users/computational-systems/edison/programming/using-openmp/
 CFLAGS = -O3 -g 

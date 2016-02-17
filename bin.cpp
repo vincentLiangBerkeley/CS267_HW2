@@ -72,6 +72,7 @@ void remove_particle(bin_t *bin_list, int i, int j)
         {
             for (int l = k; l < bin_list[j].bin_size; l ++)
                 bin_list[j].indeces[l] = bin_list[j].indeces[l+1];
+            break;
         }
     }
 

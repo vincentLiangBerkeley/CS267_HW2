@@ -6,6 +6,8 @@
 #include <math.h>
 #include "common.h"
 #include "bin.h"
+
+
 typedef struct
 {
     int* indeces;
@@ -15,12 +17,22 @@ typedef struct
 
 // This function will allocate initial memory for each bin
 void init_grid(int num_bins, bin_t *bin_list);
+
+// This function calculates the size of the bins, usually rectangular
 void set_grid_size(int &x, int &y, int num_bins);
-// This function bins particles to bins, and also allocate memory dynamically when needed
+
+// This function bins particles to bins, should be called only before the simulation
 void bin_particles(int n, particle_t *particles, int num_bins, bin_t *bin_list, double bin_x, double bin_y, int num_rows);
+
 // Called only when debugging
 void sanity_check(int n, int num_bins, bin_t *bin_list);
+
+// Deallocate the memory of each bin
 void clear_grid(int num_bins, bin_t *bin_list);
+
+// Add particle i to bin j, dynamically adjust the bin size if necessary
 void add_particle(bin_t *bin_list, int i, int j);
+
+// Remove particle i from bin j
 void remove_particle(bin_t *bin_list, int i, int j);
 #endif

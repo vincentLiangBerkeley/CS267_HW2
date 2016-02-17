@@ -4,6 +4,19 @@
 #include <assert.h>
 #include "common.h"
 
+
+// General idea for MPI version is that:
+// 1. Every processor has a full copy of the grid, but only a subset of particles
+// 2. Every processor updates only a part of the grid(could be 1-D or 2-D layout)
+// 3. Every processor moves the particles, send particles to neighboring processors
+// 4. Send a NULL particle to tell neighbors that we have finished moving so neighbors can stop receiving
+// 5. Two possible schemes for binning:
+// i) Bin all the particles in master node, then send the partitioned bins to slave nodes (More optimized)
+// ii) Broadcast all the particles to slave nodes and bin them locally (Easier)
+// 6. Every processor updates its portion of the grid based on info from the last time step.
+// 7. Every processor's grid is an updated version of the current time step
+// 8. The particle data structure needs modification since we need every particle to have an uid, or use TAG maybe?
+
 //
 //  benchmarking program
 //
