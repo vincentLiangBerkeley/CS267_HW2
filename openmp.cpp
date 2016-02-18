@@ -20,6 +20,7 @@ int main( int argc, char **argv )
         printf( "Options:\n" );
         printf( "-h to see this help\n" );
         printf( "-n <int> to set number of particles\n" );
+        printf("-t <int> to set the number of threads.\n");
         printf( "-o <filename> to specify the output file name\n" );
         printf( "-s <filename> to specify a summary file name\n" ); 
         printf( "-no turns off all correctness checks and particle output\n");   
@@ -29,6 +30,7 @@ int main( int argc, char **argv )
     int n = read_int( argc, argv, "-n", 1000 );
     char *savename = read_string( argc, argv, "-o", NULL );
     char *sumname = read_string( argc, argv, "-s", NULL );
+    numthreads = read_int(argc, argv, "-t", 8);
 
     FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
     FILE *fsum = sumname ? fopen ( sumname, "a" ) : NULL;      
@@ -53,11 +55,14 @@ int main( int argc, char **argv )
     //
     double simulation_time = read_timer( );
 
-    omp_lock_t writelock;
-    omp_init_lock(&writelock);
+    omp_lock_t *writelock = (omp_lock_t*) malloc(num_bins * sizeof(omp_lock_t));
+    for(int i = 0; i < num_bins; i ++) omp_init_lock(&writelock[i]);
+    omp_set_num_threads(numthreads);    
     #pragma omp parallel private(dmin) shared(bin_list)
     {
+    
     numthreads = omp_get_num_threads();
+    
     for( int step = 0; step < NSTEPS; step++ )
     {
         navg = 0;
@@ -92,14 +97,19 @@ int main( int argc, char **argv )
         for( int i = 0; i < n; i++ ) 
         {   
             int r_old = particles[i].y / bin_y, c_old = particles[i].x / bin_x;
+            int old_index = r_old + c_old*bin_j;
             move( particles[i] );
             int r = particles[i].y / bin_y, c = particles[i].x / bin_x;
+            int index = r+c*bin_j;
             if (r != r_old || c != c_old)
             {
-                omp_set_lock(&writelock);
-                add_particle(bin_list, i, r + c*bin_j);
+                omp_set_lock(&writelock[old_index]);
                 remove_particle(bin_list, i, r_old + c_old*bin_j);
-                omp_unset_lock(&writelock);
+                omp_unset_lock(&writelock[old_index]);
+
+                omp_set_lock(&writelock[index]);
+                add_particle(bin_list, i, r + c*bin_j);
+                omp_unset_lock(&writelock[index]);
             }
         }
 

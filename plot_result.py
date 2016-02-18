@@ -53,15 +53,14 @@ def main(argv):
     if func_name == 'openmp':
         # Plot speedup vs num_threads for openmp
         p = re.compile('(\d+.\d+)')
-        serial = os.popen('./serial -no').read()
+        serial = os.popen('./serial -n 10000 -no').read()
         serial_time = float(p.findall(serial)[1])
         speedup = []
-        for i in xrange(1, 5):
-            os.system('export OMP_NUM_THREADS=' + str(i))
-            tmp = os.popen('./openmp -no').read()
+        for i in xrange(1, 2, 9):
+            tmp = os.popen('./openmp -n 10000 -t ' + str(i) + ' -no').read()
             print tmp
             speedup.append(serial_time / float(p.findall(tmp)[1]))
-        plt.bar(xrange(1, 5), speedup, 0.35)
+        plt.bar(xrange(1, 2, 9), speedup, 0.35)
         plt.show()     
 
     
