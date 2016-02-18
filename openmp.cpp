@@ -6,7 +6,7 @@
 #include "omp.h"
 #include "bin.h"
 
-#define DEBUG 0
+#define DEBUG 1
 //
 //  benchmarking program
 //
@@ -160,7 +160,10 @@ int main( int argc, char **argv )
     if( fsum )
         fclose( fsum );
 
+    clear_grid(num_bins, bin_list);
     free( particles );
+    free(bin_list);
+
     if( fsave )
         fclose( fsave );
     
