@@ -6,7 +6,7 @@
 #include "omp.h"
 #include "bin.h"
 
-#define DEBUG 1
+#define DEBUG 0
 //
 //  benchmarking program
 //
@@ -53,6 +53,8 @@ int main( int argc, char **argv )
     //
     double simulation_time = read_timer( );
 
+    omp_lock_t writelock;
+    omp_init_lock(&writelock);
     #pragma omp parallel private(dmin) shared(bin_list)
     {
     numthreads = omp_get_num_threads();
@@ -94,8 +96,10 @@ int main( int argc, char **argv )
             int r = particles[i].y / bin_y, c = particles[i].x / bin_x;
             if (r != r_old || c != c_old)
             {
+                omp_set_lock(&writelock);
                 add_particle(bin_list, i, r + c*bin_j);
                 remove_particle(bin_list, i, r_old + c_old*bin_j);
+                omp_unset_lock(&writelock);
             }
         }
 
