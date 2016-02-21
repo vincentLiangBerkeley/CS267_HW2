@@ -30,7 +30,7 @@ int main( int argc, char **argv )
     int n = read_int( argc, argv, "-n", 1000 );
     char *savename = read_string( argc, argv, "-o", NULL );
     char *sumname = read_string( argc, argv, "-s", NULL );
-    numthreads = read_int(argc, argv, "-t", 8);
+    // numthreads = read_int(argc, argv, "-t", 8);
 
     FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
     FILE *fsum = sumname ? fopen ( sumname, "a" ) : NULL;      
@@ -57,7 +57,7 @@ int main( int argc, char **argv )
 
     omp_lock_t *writelock = (omp_lock_t*) malloc(num_bins * sizeof(omp_lock_t));
     for(int i = 0; i < num_bins; i ++) omp_init_lock(&writelock[i]);
-    omp_set_num_threads(numthreads);    
+    // omp_set_num_threads(numthreads);    
     #pragma omp parallel private(dmin) shared(bin_list)
     {
     
