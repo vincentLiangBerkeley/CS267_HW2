@@ -91,13 +91,13 @@ int main( int argc, char **argv )
             int r = particles[i].y / bin_y, c = particles[i].x / bin_x;
             if (r != r_old || c != c_old)
             {
-                add_particle(bin_list, i, r + c*bin_j);
                 remove_particle(bin_list, i, r_old + c_old*bin_j);
+                add_particle(bin_list, i, r + c*bin_j);
             }
         }	
 
         bin_particles(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
-        if (DEBUG) sanity_check(n, num_bins, bin_list);
+        // if (DEBUG) sanity_check(n, num_bins, bin_list);
     
         if( find_option( argc, argv, "-no" ) == -1 )
         {

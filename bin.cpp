@@ -81,6 +81,11 @@ void remove_particle(bin_t *bin_list, int i, int j)
         if (k == bin_list[j].bin_size - 1) 
         {
             printf("Failed to remove particle %d from bin %d\n", i, j);
+            printf("bin %d has partiles: \n", j);
+            for(int p = 0; p < bin_list[j].bin_size; p ++)
+                printf("%d \n", bin_list[j].indeces[p]);
+            printf("\n");
+
             exit(1);
         }
     }

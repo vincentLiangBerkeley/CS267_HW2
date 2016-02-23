@@ -48,6 +48,7 @@ int main( int argc, char **argv )
     double bin_x = grid_size / bin_i, bin_y = grid_size / bin_j;
     if (DEBUG) printf("The bins are of size %f by %f, err = %f\n", bin_y, bin_x, bin_x*bin_y*num_bins - grid_size*grid_size);
     init_grid(num_bins, bin_list);
+    
     bin_particles(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
 
     //

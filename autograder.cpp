@@ -63,13 +63,17 @@ int main( int argc, char **argv )
     }
 
     if (strcmp(autoname,"pthreads")==0 || strcmp(autoname,"openmp")==0 || strcmp(autoname,"mpi")==0){
+      printf("Trying to autograde openmp\n");
       if(fread){
         fscanf (fread,"%d %lf",&n[count],&t[count]);
         count++; p[0]=1;
         while( fscanf (fread,"%d %d %lf",&n[count],&p[count],&t[count]) != EOF )
+        {
+          printf("%d\n", count);
           count++;
+        }
+          
       }
- 
       num = count/2;
  
       ss[0] = sse[0] = ws[0] = t[0]/t[1];

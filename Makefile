@@ -4,7 +4,7 @@
 # Intel Compilers are loaded by default; for other compilers please check the module list
 #
 CC = gcc-4.9
-MPCC = CC
+MPCC = mpicc
 OPENMP = -fopenmp  #Note: this is the flag for Intel compilers. Change this to -fopenmp for GNU compilers. See http://www.nersc.gov/users/computational-systems/edison/programming/using-openmp/
 CFLAGS = -O3 -g 
 LIBS = -lstdc++
@@ -22,8 +22,8 @@ pthreads: pthreads.o common.o
 	$(CC) -o $@ $(LIBS) -lpthread pthreads.o common.o
 openmp: openmp.o common.o bin.o
 	$(CC) -o $@ $(LIBS) $(OPENMP) openmp.o common.o bin.o
-mpi: mpi.o common.o
-	$(MPCC) -o $@ $(LIBS) $(MPILIBS) mpi.o common.o
+mpi: mpi.o common.o bin.o
+	$(MPCC) -o $@ $(LIBS) $(MPILIBS) mpi.o common.o bin.o
 
 bin.o: bin.cpp bin.h
 	$(CC) -c $(CFLAGS) bin.cpp
