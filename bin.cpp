@@ -4,7 +4,7 @@ void init_grid(int num_bins, bin_t *bin_list)
 {
     for(int i = 0; i < num_bins; i ++)
     {
-        bin_list[i].capacity = 50;
+        bin_list[i].capacity = 20;
         bin_list[i].bin_size = 0;
         // printf("capacity = %d\n", bin_list[i].capacity);
         bin_list[i].indeces = (int*)malloc(bin_list[i].capacity*sizeof(int));
