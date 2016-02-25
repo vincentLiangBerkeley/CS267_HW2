@@ -5,7 +5,7 @@
 #include "common.h"
 #include "bin.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 //
 //  benchmarking program

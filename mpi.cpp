@@ -6,9 +6,12 @@
 #include "bin.h"
 
 #define DEBUG 0
+#define A_FLAG 0
 #define RANK 0
 #define D_FLAG DEBUG && rank == RANK
 #define DIETAG 1000000
+#define CHECK_GHOST 0
+#define GHOST 2
 //
 //  benchmarking program
 //
@@ -88,7 +91,7 @@ int main( int argc, char **argv )
     int row_start = 0, row_end = bin_j,
         col_start = local_start, col_end = local_start + local_stripes;
  
-    if (D_FLAG)
+    if (A_FLAG)
     {
         printf("Testing bin allocation across cluster:\n");
         printf("num_stripes = %d, rows_per_proc = %d, node %d starts at %d and has %d stripes.\n", num_stripes, rows_per_proc, rank, local_start, local_stripes);
@@ -105,14 +108,13 @@ int main( int argc, char **argv )
     double simulation_time = read_timer( );
     MPI_Request send_request;
     MPI_Status status;
-    for( int step = 0; step < NSTEPS; step++ )
+    for( int step = 0; step < 1000; step++ )
     {
-
         navg = 0;
         dmin = 1.0;
         davg = 0.0;
         
-        
+        MPI_Barrier(MPI_COMM_WORLD);
         //
         //  save current step if necessary (slightly different semantics than in other codes)
         //
@@ -125,53 +127,34 @@ int main( int argc, char **argv )
         //
         int locals[n];
         int local_size = 0;
-        for(int r = row_start; r < row_end; r ++)
+        for (int c = col_start; c < col_end; c ++)
         {
-            for (int c = col_start; c < col_end; c++)
+            for(int r = row_start; r < row_end; r ++)
             {
                 bin_t this_bin = bin_list[r + c*bin_j];
-                // Iterate through the particles in this bin
-                // if (D_FLAG) printf("Node %d applying force to bin at position (%d, %d) with size = %d.\n", rank, r, c, this_bin.bin_size);
                 for(int p = 0; p < this_bin.bin_size; p ++)
                 {
                     int i = this_bin.indeces[p];
-                    // Apply force from all neighboring bins
-                    locals[local_size++] = i;
+                    locals[local_size ++] = i;
+
                     particles[i].ax = particles[i].ay = 0;
-                    for (int r_n = max(0, r - 1); r_n <= min(r+1, row_end - 1); r_n ++)
+                    for(int c_n = max(c-1, 0); c_n <= min(c+1,bin_i-1); c_n++)
                     {
-                        for (int c_n = max(0, c - 1); c_n <= min(c+1, col_end - 1); c_n ++)
+                        for(int r_n = max(r-1,0); r_n <= min(r+1, bin_j-1); r_n++)
                         {
-                            bin_t neighbor = bin_list[r_n + c_n * bin_j];
-                            for(int p_n = 0; p_n < neighbor.bin_size; p_n ++)
-                                apply_force(particles[i], particles[neighbor.indeces[p_n]], &dmin, &davg, &navg);
-                            // if (dmin < 0.4) printf("Node %d has problem with particle %d in bin (%d, %d).\n", rank, i, r, c);
+                            bin_t neighbor = bin_list[r_n + c_n*bin_j];
+                            //printf("Neighbor index = %d with size: %d\n", r+c*bin_j, neighbor.bin_size);
+                            for(int j = 0; j < neighbor.bin_size; j ++)
+                                apply_force(particles[i], particles[neighbor.indeces[j]], &dmin, &davg, &navg);   
                         }
                     }
                 }
             }
         }
-
+        
         // Clear the ghost zones
-        for (int r = row_start; r < row_end; r++)
-        {
-            int index;
-            if (col_start > 0)
-            {
-                // We have to really clear this bin
-                index = r + (col_start - 1)*bin_j;
-                free(bin_list[index].indeces);
-                bin_list[index].indeces = (int*)malloc(sizeof(int)*bin_list[index].capacity);
-                bin_list[index].bin_size = 0;
-            }
-            if (col_end < bin_i - 1)
-            {
-                index = r + (col_end + 1)*bin_j;
-                free(bin_list[index].indeces);
-                bin_list[index].indeces = (int*)malloc(sizeof(int)*bin_list[index].capacity);
-                bin_list[index].bin_size = 0;
-            }
-        }
+        if (col_start > 0) clear_bin_col(bin_list, row_start, row_end, col_start - 1, bin_j);
+        if (col_end < bin_i) clear_bin_col(bin_list, row_start, row_end, col_end, bin_j);
 
         // Move the particles, send particles to destination nodes if needed
         for(int p = 0; p < local_size; p ++)
@@ -179,6 +162,8 @@ int main( int argc, char **argv )
             int i = locals[p];
             int r_old = particles[i].y / bin_y, c_old = particles[i].x / bin_x;
             move( particles[i] );
+            if (abs(particles[i].vx) > 5 || abs(particles[i].vy) > 5) 
+                printf("A particle in (%d, %d) is moving at (%f, %f)\n", r_old, c_old, particles[i].vx, particles[i].vy);
             int r = particles[i].y / bin_y, c = particles[i].x / bin_x;
 
             if (r != r_old || c != c_old)
@@ -193,7 +178,7 @@ int main( int argc, char **argv )
                 int new_node = min(c / rows_per_proc, n_proc - 1);
                 if (new_node != target) printf("There's a particle moved from node %d to node %d.\n", rank, new_node);
                 MPI_Request request;
-                MPI_Isend(&particles[i], 1, PARTICLE, new_node, i, MPI_COMM_WORLD, &request);
+                MPI_Isend(&particles[i], 1, PARTICLE, target, i, MPI_COMM_WORLD, &request);
             }
         }
 
@@ -210,8 +195,8 @@ int main( int argc, char **argv )
                 for(int p = 0; p < start_bin.bin_size; p ++)
                 {
                     int i = start_bin.indeces[p];
-                    if (D_FLAG) printf("Node %d is sending bin (%d, %d) to node %d\n", rank, r, col_start, rank - 1);
-                    MPI_Send(&particles[i], 1, PARTICLE, rank - 1, i, MPI_COMM_WORLD);
+                    if (DEBUG && rank == n_proc - 1) printf("Node %d is sending bin (%d, %d) to node %d\n", rank, r, col_start, rank - 1);
+                    MPI_Isend(&particles[i], 1, PARTICLE, rank - 1, i, MPI_COMM_WORLD, &send_request);
                 }
             }
 
@@ -221,30 +206,28 @@ int main( int argc, char **argv )
                 for(int p = 0; p < end_bin.bin_size; p ++)
                 {
                     int i = end_bin.indeces[p];
-                    if (D_FLAG) printf("Node %d is sending bin (%d, %d) to node %d\n", rank, r, col_end - 1, rank + 1);
-                    MPI_Send(&particles[i], 1, PARTICLE, rank + 1, i , MPI_COMM_WORLD);
+                    // if (DEBUG && rank == n_proc - 2) printf("Node %d is sending particle %d to node %d\n", rank, i, rank + 1);
+                    MPI_Isend(&particles[i], 1, PARTICLE, rank + 1, i , MPI_COMM_WORLD, &send_request);
                 }
             }
         }
 
-
-
         // Now send a terminating message to neighbors
         if (rank != 0)
-            MPI_Send(0, 0, MPI_INT, rank - 1, DIETAG, MPI_COMM_WORLD);
+            MPI_Isend(0, 0, MPI_INT, rank - 1, DIETAG, MPI_COMM_WORLD, &send_request);
         if (rank != n_proc - 1)
-            MPI_Send(0, 0, MPI_INT, rank + 1, DIETAG, MPI_COMM_WORLD);
+            MPI_Isend(0, 0, MPI_INT, rank + 1, DIETAG, MPI_COMM_WORLD, &send_request);
 
-        // MPI_Status send_status;
-        // MPI_Wait(&send_request, &send_status);
+        MPI_Status send_status;
+        MPI_Wait(&send_request, &send_status);
         // printf("Iteration # %d, Node %d completes all sends.\n", step, send_status.MPI_SOURCE);
 
         particle_t temp;
         int term_count = 0;
         int term_limit = (rank == 0 || rank == n_proc - 1) ? 1 : 2;
+
         while(term_count < term_limit && n_proc > 1)
         {
-            // if (D_FLAG) printf("Node %d is receiving with term_count = %d\n", rank, term_count);
             MPI_Recv(&temp, 1, PARTICLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             int i = status.MPI_TAG;
             if (i == DIETAG ) 
@@ -252,7 +235,6 @@ int main( int argc, char **argv )
                 term_count ++;
                 continue;
             }
-            if(DEBUG && rank == 1) printf("Node %d received particle %d from node %d.\n", rank, i, status.MPI_SOURCE);
             particles[i].x = temp.x;
             particles[i].y = temp.y;
             particles[i].vx = temp.vx;
@@ -261,12 +243,40 @@ int main( int argc, char **argv )
             particles[i].ay = temp.ay;
             
             int r = particles[i].y/bin_y, c = particles[i].x/bin_x;
-            // if (c >= col_start && c < col_end) printf("Node %d received an internal particle from node %d.\n", rank, status.MPI_SOURCE);
             add_particle(bin_list, i, r + c*bin_j);
         }
 
         
-        MPI_Barrier(MPI_COMM_WORLD);
+        // Check ghost zones explicitly, only the last one
+        if (CHECK_GHOST)
+        {
+            if (rank == GHOST)
+            {
+                printf("Iteration %d\n\n", step);
+                printf("The right ghost zone for Node %d is:\n", GHOST);
+                for(int r = row_start; r < row_end; r ++)
+                {
+                    bin_t this_bin = bin_list[r + (col_end)*bin_j];
+                    for(int p = 0; p < this_bin.bin_size; p ++)
+                        printf("%d ", this_bin.indeces[p]);
+                    printf("\n");
+                }
+            }
+
+            if (rank == GHOST + 1)
+            {
+                
+                printf("The left ghost zone for Node %d is\n", GHOST + 1);
+                for(int r = row_start; r < row_end; r ++)
+                {
+                    bin_t this_bin = bin_list[r + (col_start)*bin_j];
+                    for(int p = 0; p < this_bin.bin_size; p ++)
+                        printf("%d ", this_bin.indeces[p]);
+                    printf("\n");
+                }
+            }   
+        }
+        
 
         if( find_option( argc, argv, "-no" ) == -1 )
         {

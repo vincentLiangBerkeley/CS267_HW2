@@ -5,7 +5,6 @@
 #include <assert.h>
 #include <math.h>
 #include "common.h"
-#include "bin.h"
 
 
 typedef struct
@@ -24,9 +23,6 @@ void set_grid_size(int &x, int &y, int num_bins);
 // This function bins particles to bins, should be called only before the simulation
 void bin_particles(int n, particle_t *particles, int num_bins, bin_t *bin_list, double bin_x, double bin_y, int num_rows);
 
-// Called only when debugging
-void sanity_check(int n, int num_bins, bin_t *bin_list);
-
 // Deallocate the memory of each bin
 void clear_grid(int num_bins, bin_t *bin_list);
 
@@ -35,4 +31,10 @@ void add_particle(bin_t *bin_list, int i, int j);
 
 // Remove particle i from bin j
 void remove_particle(bin_t *bin_list, int i, int j);
+
+// This clears and reallocates memory for one col of the grid from start to end
+void clear_bin_col(bin_t *bin_list, int start, int end, int col, int lda);
+
+// Called only when debugging
+void sanity_check(int n, int num_bins, bin_t *bin_list);
 #endif
