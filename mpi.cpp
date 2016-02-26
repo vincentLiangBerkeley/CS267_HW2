@@ -15,6 +15,15 @@
 //
 //  benchmarking program
 //
+//
+bool isPrime(int n)
+{
+    if (n <= 2) return true;
+    for(int i = 2; i < sqrt(n); i ++)
+        if (n % i == 0) return false;
+    return true;
+}
+
 int main( int argc, char **argv )
 {    
     int navg, nabsavg=0;
@@ -217,10 +226,6 @@ int main( int argc, char **argv )
             MPI_Isend(0, 0, MPI_INT, rank - 1, DIETAG, MPI_COMM_WORLD, &send_request);
         if (rank != n_proc - 1)
             MPI_Isend(0, 0, MPI_INT, rank + 1, DIETAG, MPI_COMM_WORLD, &send_request);
-
-        MPI_Status send_status;
-        MPI_Wait(&send_request, &send_status);
-        // printf("Iteration # %d, Node %d completes all sends.\n", step, send_status.MPI_SOURCE);
 
         particle_t temp;
         int term_count = 0;
