@@ -11,15 +11,22 @@
 #define D_FLAG DEBUG && rank == RANK
 #define DIETAG 1000000
 #define CHECK_GHOST 0
-#define GHOST 2
+#define GHOST 0
+
+#define SEND_BIN(target) \
+    for(int i = 0; i < this_bin.bin_size; i ++){ \
+        MPI_Isend(&particles[this_bin.indeces[i]], 1, PARTICLE, (target), this_bin.indeces[i] , MPI_COMM_WORLD, &send_request); \
+    }
+
+#define SEND_DIE(target) \
+    MPI_Isend(0, 0, MPI_INT, (target), DIETAG, MPI_COMM_WORLD, &send_request);
 //
 //  benchmarking program
-//
 //
 bool isPrime(int n)
 {
     if (n <= 2) return true;
-    for(int i = 2; i < sqrt(n); i ++)
+    for(int i = 2; i <= sqrt(n); i ++)
         if (n % i == 0) return false;
     return true;
 }
@@ -90,24 +97,40 @@ int main( int argc, char **argv )
     init_grid(num_bins, bin_list);
     bin_particles(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
 
+    // Setting up 2D layout of the grid, each node needs to now row_start, row_end, col_start, col_end
+    int row_part, col_part, row_start, col_start, row_end, col_end, rows_per_proc, cols_per_proc, num_stripes, local_start, local_stripes;
+    bool two_d = isPrime(n_proc) ? false:true;
+    if(!two_d)
+    {
+         // Setting up bin partitioning across the cluster, this is 1D layout
+        num_stripes = num_bins / min(bin_i, bin_j);
+        cols_per_proc = num_stripes / n_proc; // This assumes n_proc is not too large
+        local_start = rank*cols_per_proc, local_stripes = rank == n_proc-1 ? num_stripes-cols_per_proc*rank : cols_per_proc;
 
-    // Setting up bin partitioning across the cluster, this is 1D layout
-    int num_stripes = num_bins / min(bin_i, bin_j);
-    int rows_per_proc = num_stripes / n_proc; // This assumes n_proc is not too large
-    int local_start = rank*rows_per_proc, local_stripes = rank == n_proc-1 ? num_stripes-rows_per_proc*rank : rows_per_proc;
+        row_start = 0, row_end = bin_j, col_start = local_start, col_end = local_start + local_stripes;
+    }else
+    {
+        set_grid_size(col_part, row_part, n_proc);
+        rows_per_proc = bin_j / row_part, cols_per_proc = bin_i / col_part;
 
+        row_start = (rank % row_part) * rows_per_proc, row_end = ((rank + 1) % row_part == 0) ? bin_j : row_start + rows_per_proc;
+        col_start = (rank / row_part) * cols_per_proc, col_end = ((rank / row_part) == col_part - 1) ? bin_i : col_start + cols_per_proc;
+    }
 
-    int row_start = 0, row_end = bin_j,
-        col_start = local_start, col_end = local_start + local_stripes;
+   
  
     if (A_FLAG)
     {
         printf("Testing bin allocation across cluster:\n");
-        printf("num_stripes = %d, rows_per_proc = %d, node %d starts at %d and has %d stripes.\n", num_stripes, rows_per_proc, rank, local_start, local_stripes);
-        int sum = 0;
-        for (int i = 0; i < n; i ++) 
-            if (particles[i].vx != -1) sum++;
-        printf("Node %d has %d particles.\n", rank, sum);
+        if (isPrime(n_proc))
+            printf("num_stripes = %d, cols_per_proc = %d, node %d starts at %d and has %d stripes.\n", num_stripes, cols_per_proc, rank, local_start, local_stripes);
+        else
+        {
+            printf("row_part = %d, col_part = %d, rows_per_proc = %d, cols_per_proc = %d.\n", row_part, col_part, rows_per_proc, cols_per_proc);
+            if (rank == n_proc - 1)
+                printf("The last node has rows %d to %d, cols %d to %d.\n", row_start, row_end, col_start, col_end);
+        }
+       
     }
 
 
@@ -117,7 +140,7 @@ int main( int argc, char **argv )
     double simulation_time = read_timer( );
     MPI_Request send_request;
     MPI_Status status;
-    for( int step = 0; step < 1000; step++ )
+    for( int step = 0; step < NSTEPS; step++ )
     {
         navg = 0;
         dmin = 1.0;
@@ -161,9 +184,24 @@ int main( int argc, char **argv )
             }
         }
         
+
+
         // Clear the ghost zones
         if (col_start > 0) clear_bin_col(bin_list, row_start, row_end, col_start - 1, bin_j);
         if (col_end < bin_i) clear_bin_col(bin_list, row_start, row_end, col_end, bin_j);
+        if (row_start > 0) clear_bin_row(bin_list, col_start, col_end, row_start - 1, bin_j);
+        if (row_end < bin_j) clear_bin_row(bin_list, col_start, col_end, row_end, bin_j);
+
+        // Now handle the corners
+        if (row_start > 0 && col_start > 0)
+            clear_bin(bin_list, row_start - 1 + (col_start - 1)*bin_j);
+        if (row_start > 0 && col_end < bin_i)
+            clear_bin(bin_list, row_start - 1 + col_end * bin_j);
+        if (row_end < bin_j && col_start > 0)
+            clear_bin(bin_list, row_end + (col_start - 1)*bin_j);
+        if (row_end < bin_j && col_end < bin_i)
+            clear_bin(bin_list, row_end + col_end * bin_j);
+        
 
         // Move the particles, send particles to destination nodes if needed
         for(int p = 0; p < local_size; p ++)
@@ -181,11 +219,10 @@ int main( int argc, char **argv )
                 add_particle(bin_list, i, r + c*bin_j);
             }
 
-            if (c < col_start || c >= col_end)
+            // This needs modification for 2D case
+            int target = two_d ? min(r/rows_per_proc, row_part - 1) + min(c/cols_per_proc, col_part - 1)*row_part : min(c/cols_per_proc, n_proc - 1);
+            if (target != rank)
             {
-                int target = c < col_start ? rank - 1:rank + 1;
-                int new_node = min(c / rows_per_proc, n_proc - 1);
-                if (new_node != target) printf("There's a particle moved from node %d to node %d.\n", rank, new_node);
                 MPI_Request request;
                 MPI_Isend(&particles[i], 1, PARTICLE, target, i, MPI_COMM_WORLD, &request);
             }
@@ -195,41 +232,148 @@ int main( int argc, char **argv )
 
         MPI_Request send_request;
         // Finished moving and sending particles, now send ghost zones:
-        for(int r = row_start; r < row_end; r++)
+        // Now we have to send particles to 8 neighbors, hard to handle the diagonal cases.
+        // 
+        // 
+        if (two_d) // Performs 2D layout send neighbors
         {
-            // if(D_FLAG) printf("Node %d is sending particles in row %d.\n", rank, r);
-            if(rank != 0)
+            if (row_start > 0 && two_d)
+            // Send up
             {
-                bin_t start_bin = bin_list[r + col_start*bin_j];
-                for(int p = 0; p < start_bin.bin_size; p ++)
+                if (DEBUG) printf("Sending up: node = %d, target = %d\n", rank, rank - 1);
+                for(int c = col_start; c < col_end; c++)
                 {
-                    int i = start_bin.indeces[p];
-                    if (DEBUG && rank == n_proc - 1) printf("Node %d is sending bin (%d, %d) to node %d\n", rank, r, col_start, rank - 1);
-                    MPI_Isend(&particles[i], 1, PARTICLE, rank - 1, i, MPI_COMM_WORLD, &send_request);
+                    bin_t this_bin = bin_list[row_start + c*bin_j];
+                    SEND_BIN(rank - 1);
+                }
+
+                if (col_start > 0) // Send top left corner
+                {   
+                    if(DEBUG) printf("Sending left top: node = %d, target = %d\n", rank, rank - 1- row_part);
+                    bin_t this_bin = bin_list[row_start + col_start*bin_j];
+                    SEND_BIN(rank - 1 - row_part);
+                }
+
+                if (col_end < bin_i) // Send top right corner
+                {   
+                    if(DEBUG) printf("Sending right top: node = %d, target = %d\n", rank, rank - 1 + row_part);
+                    bin_t this_bin = bin_list[row_start + (col_end - 1)*bin_j];
+                    SEND_BIN(rank - 1 + row_part);
                 }
             }
 
+            if (row_end < bin_j && two_d) // Send down
+            {
+                if(DEBUG) printf("Sending down, node = %d, target = %d\n", rank, rank + 1);
+                for(int c = col_start; c < col_end; c++)
+                {
+                    bin_t this_bin = bin_list[row_end-1 + c*bin_j];
+                    SEND_BIN(rank + 1);
+                }
+
+                if (col_start > 0) // Send bottom left corner
+                {
+                    if (DEBUG) printf("Sending bot left, node = %d, target = %d\n", rank, rank + 1 - row_part);
+                    bin_t this_bin = bin_list[row_end -1 + col_start*bin_j];
+                    SEND_BIN(rank + 1 - row_part);
+                }
+
+                if (col_end < bin_i) //Send bottom right corner
+                {   
+                    if (DEBUG) printf("Sending bot right, node = %d, target = %d\n", rank, rank + 1 + row_part);
+                    bin_t this_bin = bin_list[row_end -1 + (col_end - 1)*bin_j];
+                    SEND_BIN(rank + 1 + row_part);
+                }   
+            }
+
+            if (col_start > 0) // Send left
+            {
+                for(int r = row_start; r < row_end; r ++)
+                {
+
+                    bin_t this_bin = bin_list[r + col_start*bin_j];
+                    SEND_BIN(rank - row_part);
+                }
+            }
+
+            if (col_end < bin_i) // Send right
+            {
+                if (DEBUG) printf("Sending right, node = %d, target = %d\n", rank, rank + row_part);
+                for(int r = row_start; r < row_end; r ++)
+                {
+                    bin_t this_bin = bin_list[r + (col_end - 1)*bin_j];
+                    SEND_BIN(rank + row_part);
+                }
+            }
+
+            // Now send a terminating message to neighbors
+            if (row_start > 0)
+            {
+                SEND_DIE(rank - 1);
+                if (col_start > 0) SEND_DIE(rank - 1 - row_part);
+                if (col_end < bin_i) SEND_DIE(rank - 1 + row_part);
+            }
+
+            if (row_end < bin_j)
+            {
+                SEND_DIE(rank + 1);
+                if (col_start > 0) SEND_DIE(rank + 1 - row_part);
+                if (col_end < bin_i) SEND_DIE(rank + 1 + row_part);
+            }
+
+            if (col_start > 0) SEND_DIE(rank - row_part);
+            if (col_end < bin_i) SEND_DIE(rank + row_part); 
+        }else // Performs 1D layout send neighbors
+        {
+            for(int r = row_start; r < row_end; r++)
+            {
+                // if(D_FLAG) printf("Node %d is sending particles in row %d.\n", rank, r);
+                if(rank != 0)
+                {
+                    bin_t start_bin = bin_list[r + col_start*bin_j];
+                    for(int p = 0; p < start_bin.bin_size; p ++)
+                    {
+                        int i = start_bin.indeces[p];
+                        if (DEBUG && rank == n_proc - 1) printf("Node %d is sending bin (%d, %d) to node %d\n", rank, r, col_start, rank - 1);
+                        MPI_Isend(&particles[i], 1, PARTICLE, rank - 1, i, MPI_COMM_WORLD, &send_request);
+                    }
+                }
+
+                if (rank != n_proc - 1)
+                {
+                    bin_t end_bin = bin_list[r + (col_end - 1)*bin_j];
+                    for(int p = 0; p < end_bin.bin_size; p ++)
+                    {
+                        int i = end_bin.indeces[p];
+                        // if (DEBUG && rank == n_proc - 2) printf("Node %d is sending particle %d to node %d\n", rank, i, rank + 1);
+                        MPI_Isend(&particles[i], 1, PARTICLE, rank + 1, i , MPI_COMM_WORLD, &send_request);
+                    }
+                }
+            }
+
+            // Now send a terminating message to neighbors
+            if (rank != 0)
+                MPI_Isend(0, 0, MPI_INT, rank - 1, DIETAG, MPI_COMM_WORLD, &send_request);
             if (rank != n_proc - 1)
-            {
-                bin_t end_bin = bin_list[r + (col_end - 1)*bin_j];
-                for(int p = 0; p < end_bin.bin_size; p ++)
-                {
-                    int i = end_bin.indeces[p];
-                    // if (DEBUG && rank == n_proc - 2) printf("Node %d is sending particle %d to node %d\n", rank, i, rank + 1);
-                    MPI_Isend(&particles[i], 1, PARTICLE, rank + 1, i , MPI_COMM_WORLD, &send_request);
-                }
-            }
+                MPI_Isend(0, 0, MPI_INT, rank + 1, DIETAG, MPI_COMM_WORLD, &send_request);
         }
-
-        // Now send a terminating message to neighbors
-        if (rank != 0)
-            MPI_Isend(0, 0, MPI_INT, rank - 1, DIETAG, MPI_COMM_WORLD, &send_request);
-        if (rank != n_proc - 1)
-            MPI_Isend(0, 0, MPI_INT, rank + 1, DIETAG, MPI_COMM_WORLD, &send_request);
+        
 
         particle_t temp;
         int term_count = 0;
-        int term_limit = (rank == 0 || rank == n_proc - 1) ? 1 : 2;
+        int term_limit = two_d ? 8 : 2;
+        if (two_d)
+        {
+            if (row_start == 0 || row_end == bin_j) // The first row
+                term_limit = (col_start == 0 || col_end == bin_i) ? 3 : 5;
+            if (col_start == 0 || col_end == bin_i)
+                term_limit = (row_start == 0 || row_end == bin_j) ? 3 : 5;
+        }else
+        {
+            if(rank == 0) term_limit --;
+            if(rank == n_proc - 1) term_limit --;
+        }
+       
 
         while(term_count < term_limit && n_proc > 1)
         {
@@ -238,6 +382,7 @@ int main( int argc, char **argv )
             if (i == DIETAG ) 
             {
                 term_count ++;
+
                 continue;
             }
             particles[i].x = temp.x;
@@ -258,7 +403,7 @@ int main( int argc, char **argv )
             if (rank == GHOST)
             {
                 printf("Iteration %d\n\n", step);
-                printf("The right ghost zone for Node %d is:\n", GHOST);
+                printf("The right ghost zone for Node %d is:\n", rank);
                 for(int r = row_start; r < row_end; r ++)
                 {
                     bin_t this_bin = bin_list[r + (col_end)*bin_j];
@@ -268,10 +413,10 @@ int main( int argc, char **argv )
                 }
             }
 
-            if (rank == GHOST + 1)
+            if (rank == GHOST + 2)
             {
                 
-                printf("The left ghost zone for Node %d is\n", GHOST + 1);
+                printf("The left ghost zone for Node %d is\n", rank);
                 for(int r = row_start; r < row_end; r ++)
                 {
                     bin_t this_bin = bin_list[r + (col_start)*bin_j];
