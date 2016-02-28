@@ -27,10 +27,24 @@ void clear_bin_col(bin_t *bin_list, int start, int end, int col, int lda)
     for(int r = start; r < end; r ++)
     {
         int index = r + col * lda;
-        free(bin_list[index].indeces);
-        bin_list[index].indeces = (int*)malloc(sizeof(int)*bin_list[index].capacity);
-        bin_list[index].bin_size = 0;
+        clear_bin(bin_list, index);
     }
+}
+
+void clear_bin_row(bin_t *bin_list, int start, int end, int row, int lda)
+{
+    for(int c = start; c < end; c ++)
+    {
+        int index = row + c * lda;
+        clear_bin(bin_list, index);
+    }
+}
+
+void clear_bin(bin_t *bin_list, int index)
+{
+    free(bin_list[index].indeces);
+    bin_list[index].indeces = (int*)malloc(sizeof(int)*bin_list[index].capacity);
+    bin_list[index].bin_size = 0;
 }
 
 // The list of bins will be separated into y*x
