@@ -19,7 +19,6 @@ void clear_grid(int num_bins, bin_t *bin_list)
         free(bin_list[i].indeces);
         bin_list[i].indeces = NULL;
     }
-        
 }
 
 void clear_bin_col(bin_t *bin_list, int start, int end, int col, int lda)
@@ -84,7 +83,7 @@ void add_particle(bin_t *bin_list, int i, int j)
     if (bin_list[j].bin_size == bin_list[j].capacity)
         // Need to allocate more memory here
     {
-        // printf("Reallocating memory to bin # %d\n", j);
+        printf("Reallocating memory to bin # %d\n", j);
         bin_list[j].indeces = (int*) realloc(bin_list[j].indeces, 2*bin_list[j].capacity*sizeof(int));
         bin_list[j].capacity  *= 2;
     }

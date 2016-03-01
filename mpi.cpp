@@ -116,9 +116,7 @@ int main( int argc, char **argv )
         row_start = (rank % row_part) * rows_per_proc, row_end = ((rank + 1) % row_part == 0) ? bin_j : row_start + rows_per_proc;
         col_start = (rank / row_part) * cols_per_proc, col_end = ((rank / row_part) == col_part - 1) ? bin_i : col_start + cols_per_proc;
     }
-
-   
- 
+    
     if (A_FLAG)
     {
         printf("Testing bin allocation across cluster:\n");
@@ -237,7 +235,7 @@ int main( int argc, char **argv )
         // 
         if (two_d) // Performs 2D layout send neighbors
         {
-            if (row_start > 0 && two_d)
+            if (row_start > 0)
             // Send up
             {
                 if (DEBUG) printf("Sending up: node = %d, target = %d\n", rank, rank - 1);
@@ -262,7 +260,7 @@ int main( int argc, char **argv )
                 }
             }
 
-            if (row_end < bin_j && two_d) // Send down
+            if (row_end < bin_j) // Send down
             {
                 if(DEBUG) printf("Sending down, node = %d, target = %d\n", rank, rank + 1);
                 for(int c = col_start; c < col_end; c++)
@@ -288,6 +286,7 @@ int main( int argc, char **argv )
 
             if (col_start > 0) // Send left
             {
+                if (DEBUG) printf("Sending left, node = %d, target = %d\n", rank, rank - row_part);
                 for(int r = row_start; r < row_end; r ++)
                 {
 
