@@ -3,11 +3,11 @@
 #
 # Intel Compilers are loaded by default; for other compilers please check the module list
 #
-CC = gcc-4.9
-MPCC = mpicc
+CC = CC
+MPCC = CC
 OPENMP = -fopenmp  #Note: this is the flag for Intel compilers. Change this to -fopenmp for GNU compilers. See http://www.nersc.gov/users/computational-systems/edison/programming/using-openmp/
-CFLAGS = -O3 -g 
-LIBS = -lstdc++
+CFLAGS = -O3
+LIBS =
 
 
 TARGETS = serial pthreads openmp mpi autograder
@@ -36,7 +36,7 @@ serial.o: serial.cpp common.h bin.h
 pthreads.o: pthreads.cpp common.h
 	$(CC) -c $(CFLAGS) pthreads.cpp
 mpi.o: mpi.cpp common.h
-	$(MPCC) -c $(CFLAGS) mpi.cpp
+	$(MPCC) -c $(CFLAGS) mpi.cpp 
 common.o: common.cpp common.h
 	$(CC) -c $(CFLAGS) common.cpp
 

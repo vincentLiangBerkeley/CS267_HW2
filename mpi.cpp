@@ -63,7 +63,7 @@ int main( int argc, char **argv )
     MPI_Init( &argc, &argv );
     MPI_Comm_size( MPI_COMM_WORLD, &n_proc );
     MPI_Comm_rank( MPI_COMM_WORLD, &rank );
-    
+    if(rank == 0) printf("Number of cores = %d.\n", n_proc); 
     //
     //  allocate generic resources
     //
@@ -144,7 +144,6 @@ int main( int argc, char **argv )
         dmin = 1.0;
         davg = 0.0;
         
-        MPI_Barrier(MPI_COMM_WORLD);
         //
         //  save current step if necessary (slightly different semantics than in other codes)
         //
@@ -446,7 +445,7 @@ int main( int argc, char **argv )
             if (rdmin < absmin) absmin = rdmin;
           }
         }
-       
+        MPI_Barrier(MPI_COMM_WORLD); 
     }
     simulation_time = read_timer( ) - simulation_time;
   
@@ -479,6 +478,7 @@ int main( int argc, char **argv )
     //
     //  release resources
     //
+    // MPI_Barrier(MPI_COMM_WORLD);
     if ( fsum )
         fclose( fsum );
     clear_grid(num_bins, bin_list);
@@ -486,7 +486,6 @@ int main( int argc, char **argv )
     free( particles );
     if( fsave )
         fclose( fsave );
-    
     MPI_Finalize( );
     
     return 0;
