@@ -394,7 +394,6 @@ int main( int argc, char **argv )
             add_particle(bin_list, i, r + c*bin_j);
         }
 
-        MPI_Wait(&send_request, &status);
         // Check ghost zones explicitly, only the last one
         if (CHECK_GHOST)
         {
@@ -445,7 +444,7 @@ int main( int argc, char **argv )
             if (rdmin < absmin) absmin = rdmin;
           }
         }
-        // MPI_Barrier(MPI_COMM_WORLD); 
+        MPI_Barrier(MPI_COMM_WORLD); 
     }
     simulation_time = read_timer( ) - simulation_time;
   
