@@ -1,0 +1,488 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include <math.h>
+#include <cuda.h>
+#include "common.h"
+
+#define NUM_THREADS 256
+#define DEBUG 1
+
+typedef struct
+{
+    int indeces[40];
+    int bin_size;
+    int capacity;
+} bin_t;
+
+struct Lock {
+    int *mutex;
+    Lock ( ){
+        int state = 0;
+
+        cudaMalloc((void **) &mutex, sizeof(int));
+        cudaMemcpy(mutex, &state, sizeof(int), cudaMemcpyHostToDevice);
+    }
+
+    ~Lock( void ) {
+        cudaFree( mutex );
+    }
+
+    __device__ void lock( void ) {
+        while( atomicCAS( mutex, 0, 1 ) != 0 );
+    }
+
+    __device__ void unlock( void ) {
+        atomicExch( mutex, 0 );
+    }
+};
+
+extern double size;
+void init_bin_list(int num_bins, int *bin_list);
+__global__ void init_bin_lock(int num_bins, int *bin_lock);
+void bin_particles(int n, particle_t *particles, bin_t *bin_list, double column_step, double row_step, int num_columns_bins);
+void set_bin_size(int &num_columns_bins, int &num_rows_bins, int num_bins);
+__device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor);
+__global__ void compute_forces_gpu(particle_t* particles, int n, int num_rows_bins, int num_columns_bins, int* particle_list, int* bin_list, double column_step, double row_step);
+__device__ void move_particle( particle_t &p, double size );
+__global__ void move_gpu (particle_t * particles, int n, double size);
+__global__ void assign_particles (particle_t * particles, int n, int num_rows_bins, int num_columns_bins, bin_t *bin_list, double column_step, double row_step, int * bin_lock, double size);
+__global__ void clear_grid(int num_bins, bin_t *bin_list);
+__device__ void add_particle(bin_t *bin_list, int i, int j);
+__device__ void remove_particle(bin_t *bin_list, int i, int j);
+void other_add_particle(bin_t *bin_list, int i, int j);
+void sanity_check(int n, int num_bins, bin_t *bin_list);
+
+
+void sanity_check(int n, int num_bins, bin_t *bin_list)
+{
+    int sum = 0;
+    for(int i = 0; i < num_bins; i ++)
+    {
+        // if(bin_list[i].bin_size > 2)
+        //     printf("bin # %d has %d particles\n", i, bin_list[i].bin_size);
+        sum += bin_list[i].bin_size;
+    }
+
+    if(sum == n) printf("The total number of particles is unchanged.\n");
+    else printf("Sum = %d, n = %d\n", sum, n);
+}
+
+//
+// Initialize bin_list
+//
+void init_bin_list(int num_bins, bin_t *bin_list)
+{
+    for (int tid = 0; tid < num_bins; ++tid)
+    {
+        bin_list[tid].capacity = 40;
+        bin_list[tid].bin_size = 0;
+        //bin_list[tid].indeces = (int*)malloc(bin_list[tid].capacity*sizeof(int));
+        //bin_list[tid].indeces = (int*)malloc(40*sizeof(int));
+        for (int i = 0; i < 40; ++i)
+            bin_list[tid].indeces[i] = -1;
+    }
+}
+
+//
+// Initialize bin_lock
+//
+__global__ void init_bin_lock(int num_bins, int *bin_lock)
+{
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid >= num_bins) return;
+    bin_lock[tid] = 0;
+    if (tid == 0)
+        printf("bin_lock[0] = %d\n", bin_lock[tid]);
+}
+
+__global__ void clear_grid(int num_bins, bin_t *bin_list)
+{
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid >= num_bins) return;
+
+    free(bin_list[tid].indeces);
+    //bin_list[tid].indeces = NULL;
+}
+
+// The size of the global board is known from outside of this file
+// Also, this function will also dynamically adjust the size of the bins
+void bin_particles(int n, particle_t *particles, bin_t *bin_list, double column_step, double row_step, int num_columns_bins)
+{
+    for (int tid = 0; tid < n; ++tid)
+    {
+        int x = particles[tid].x / column_step, y = particles[tid].y / row_step;
+        int index = x + y * num_columns_bins;
+        other_add_particle(bin_list, tid, index);
+    }
+}
+
+//
+// For given num_bins, set balanced num_columns_bins and num_row_bins such that num_columns_bins * num_rows_bins == num_bins
+//
+void set_bin_size(int &num_columns_bins, int &num_rows_bins, int num_bins)
+{
+    int m = static_cast<int>(sqrt(num_bins));
+    for( int i = m; i > 0; --i )
+    {
+        if(num_bins % i == 0)
+        {
+            num_rows_bins = i;
+            break;
+        }
+    }
+    num_columns_bins = num_bins / num_rows_bins;
+}
+
+//
+//  compute force caused by neighbor on target particle
+//
+__device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor)
+{
+    double dx = neighbor.x - particle.x;
+    double dy = neighbor.y - particle.y;
+    double r2 = dx * dx + dy * dy;
+    if( r2 > cutoff*cutoff )
+        return;
+    //r2 = fmax( r2, min_r*min_r );
+    r2 = (r2 > min_r*min_r) ? r2 : min_r*min_r;
+    double r = sqrt( r2 );
+
+    //
+    //  very simple short-range repulsive force
+    //
+    double coef = ( 1 - cutoff / r ) / r2 / mass;
+    particle.ax += coef * dx;
+    particle.ay += coef * dy;
+}
+
+//
+//  loop over every particle, compute the force
+//
+
+__global__ void compute_forces_gpu(particle_t* particles, int n, int num_rows_bins, int num_columns_bins, bin_t *bin_list, double column_step, double row_step)
+{
+    // Get thread (particle) ID
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    //printf("compute force\n");
+    if(tid >= n) return;
+
+    particles[tid].ax = particles[tid].ay = 0;
+    int row_num = particles[tid].y / row_step, column_num = particles[tid].x / column_step;
+    // Traversing the neighbors
+    for(int r = max(row_num - 1, 0); r <= min(row_num + 1, num_rows_bins - 1); r++)
+    {
+        for(int c = max(column_num - 1, 0); c <= min(column_num + 1, num_columns_bins - 1); c++)
+        {
+            bin_t neighbor = bin_list[c + r * num_columns_bins];
+            for(int j = 0; j < neighbor.bin_size; j ++)
+                apply_force_gpu(particles[tid], particles[neighbor.indeces[j]]);
+        }
+    }
+}
+
+//
+// move every particle
+//
+__global__ void move_gpu (particle_t * particles, int n, double size)
+{
+
+    // Get thread (particle) ID
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid >= n) return;
+
+    particle_t * p = &particles[tid];
+    //
+    //  slightly simplified Velocity Verlet integration
+    //  conserves energy better than explicit Euler method
+    //
+    p->vx += p->ax * dt;
+    p->vy += p->ay * dt;
+    p->x  += p->vx * dt;
+    p->y  += p->vy * dt;
+
+    //
+    //  bounce from walls
+    //
+    while( p->x < 0 || p->x > size )
+    {
+        p->x  = p->x < 0 ? -(p->x) : 2*size-p->x;
+        p->vx = -(p->vx);
+    }
+    while( p->y < 0 || p->y > size )
+    {
+        p->y  = p->y < 0 ? -(p->y) : 2*size-p->y;
+        p->vy = -(p->vy);
+    }
+
+}
+
+__device__ void move_particle( particle_t &p, double size )
+{
+    //
+    //  slightly simplified Velocity Verlet integration
+    //  conserves energy better than explicit Euler method
+    //
+    p.vx += p.ax * dt;
+    p.vy += p.ay * dt;
+    p.x  += p.vx * dt;
+    p.y  += p.vy * dt;
+
+    //
+    //  bounce from walls
+    //
+    while( p.x < 0 || p.x > size )
+    {
+        p.x  = p.x < 0 ? -p.x : 2*size-p.x;
+        p.vx = -p.vx;
+    }
+    while( p.y < 0 || p.y > size )
+    {
+        p.y  = p.y < 0 ? -p.y : 2*size-p.y;
+        p.vy = -p.vy;
+    }
+}
+
+//
+// assign particles, need to deal with race conditions
+//
+__global__ void assign_particles (particle_t * particles, int n, int num_rows_bins, int num_columns_bins, bin_t *bin_list, double column_step, double row_step, Lock * bin_lock, double size)
+{
+    // Get thread (particle) ID
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid >= n) return;
+
+    int r_old = particles[tid].y / row_step, c_old = particles[tid].x / column_step;
+    int old_index = c_old + r_old * num_columns_bins;
+    move_particle( particles[tid], size );
+    int r = particles[tid].y / row_step, c = particles[tid].x / column_step;
+    int index = c + r * num_columns_bins;
+    //printf("index:%d\n", bin_lock[index]);
+    //if (tid == 0)
+    //    printf("move particle %d from bin %d to bin %d.\n", tid, old_index, index);
+
+    if (r != r_old || c != c_old)
+    {
+        /*printf("move particle %d from bin %d to bin %d.\n", tid, old_index, index);
+        while( atomicExch( &bin_lock[old_index], 1 ) != 0 );
+        remove_particle(bin_list, tid, old_index);
+        atomicSub( &bin_lock[old_index], 1 );
+
+        while( atomicExch( &bin_lock[index], 1 ) != 0 );
+        add_particle(bin_list, tid, index);
+        atomicSub( &bin_lock[index], 1 );*/
+
+        printf("move particle %d from bin %d to bin %d.\n", tid, old_index, index);
+        //printf("lock is %d\n", *bin_lock[old_index].mutex);
+        bin_lock[old_index].lock();
+        remove_particle(bin_list, tid, old_index);
+        bin_lock[old_index].unlock();
+
+        bin_lock[index].lock();
+        add_particle(bin_list, tid, index);
+        bin_lock[index].unlock();
+    }
+}
+
+__device__ void remove_particle(bin_t *bin_list, int i, int j)
+{
+    for (int k = 0; k < bin_list[j].bin_size; k++)
+    {
+        if (bin_list[j].indeces[k] == i) // Need to remove this particle
+        {
+            for (int l = k; l < bin_list[j].bin_size; l ++)
+                bin_list[j].indeces[l] = bin_list[j].indeces[l+1];
+            break;
+        }
+        /*if (k == bin_list[j].bin_size - 1)
+        {
+            printf("Failed to remove particle %d from bin %d\n", i, j);
+            printf("bin %d has partiles: \n", j);
+            for(int p = 0; p < bin_list[j].bin_size; p ++)
+                printf("%d \n", bin_list[j].indeces[p]);
+            printf("\n");
+        }*/
+    }
+
+    bin_list[j].bin_size --;
+}
+
+__device__ void add_particle(bin_t *bin_list, int i, int j)
+{
+    if (bin_list[j].bin_size == bin_list[j].capacity)
+        // Need to allocate more memory here
+    {
+        printf("Reallocating memory to bin # %d\n", j);
+        //bin_list[j].indeces = (int*) realloc(bin_list[j].indeces, 2*bin_list[j].capacity*sizeof(int));
+        //bin_list[j].capacity  *= 2;
+    }
+
+    bin_list[j].indeces[bin_list[j].bin_size] = i;
+    bin_list[j].bin_size ++;
+}
+
+void other_add_particle(bin_t *bin_list, int i, int j)
+{
+    if (bin_list[j].bin_size == bin_list[j].capacity)
+        // Need to allocate more memory here
+    {
+        printf("Reallocating memory to bin # %d\n", j);
+        //bin_list[j].indeces = (int*) realloc(bin_list[j].indeces, 2*bin_list[j].capacity*sizeof(int));
+        //bin_list[j].capacity  *= 2;
+    }
+
+    bin_list[j].indeces[bin_list[j].bin_size] = i;
+    bin_list[j].bin_size ++;
+}
+
+
+int main( int argc, char **argv )
+{
+    // This takes a few seconds to initialize the runtime
+    cudaThreadSynchronize();
+
+    if( find_option( argc, argv, "-h" ) >= 0 )
+    {
+        printf( "Options:\n" );
+        printf( "-h to see this help\n" );
+        printf( "-n <int> to set the number of particles\n" );
+        printf( "-o <filename> to specify the output file name\n" );
+        return 0;
+    }
+
+    int n = read_int( argc, argv, "-n", 1000 );
+
+    char *savename = read_string( argc, argv, "-o", NULL );
+
+    FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
+    particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
+
+    // GPU particle data structure
+    particle_t *d_particles;
+    cudaMalloc((void **) &d_particles, n * sizeof(particle_t));
+
+    set_size( n );
+
+    init_particles( n, particles );
+
+    if (DEBUG)
+    {
+        printf("particle 1: %lf, %lf\n", particles[1].x, particles[1].y);
+        printf("particle 2: %lf, %lf\n", particles[2].x, particles[2].y);
+        printf("particle 3: %lf, %lf\n", particles[3].x, particles[3].y);
+        printf("particle 4: %lf, %lf\n", particles[4].x, particles[4].y);
+    }
+
+    cudaThreadSynchronize();
+    double copy_time = read_timer( );
+    // Copy the particles to the GPU
+    cudaMemcpy(d_particles, particles, n * sizeof(particle_t), cudaMemcpyHostToDevice);
+    cudaThreadSynchronize();
+    copy_time = read_timer( ) - copy_time;
+
+    // compute number of bins
+    int num_bins = n % 4 == 0 ? n/4:n/4+1;
+    // compute num_columns_bins and num_rows_bins such that num_columns_bins * num_rows_bins == num_bins
+    int num_columns_bins, num_rows_bins;
+    set_bin_size(num_columns_bins, num_rows_bins, num_bins);
+    double column_step = size / num_columns_bins;
+    double row_step = size / num_rows_bins;
+    if (DEBUG)
+        printf("num_columns_bins is %d, num_rows_bins is %d, num_bins is %d. \n", num_columns_bins, num_rows_bins, num_bins);
+    if (DEBUG)
+        printf("column_step is %lf, row_step is %lf\n", column_step, row_step);
+
+    bin_t * global_bin_list = (bin_t*) malloc( num_bins * sizeof(bin_t));
+    init_bin_list(num_bins, global_bin_list);
+    bin_t * bin_list;
+    Lock * bin_lock;
+    int bins_blks = (num_bins + NUM_THREADS - 1) / NUM_THREADS;
+    int blks = (n + NUM_THREADS - 1) / NUM_THREADS;
+    cudaMalloc((void **) &bin_list, num_bins * sizeof(bin_t));
+    cudaMalloc((void **) &bin_lock, num_bins * sizeof(Lock));
+    if (DEBUG)
+        printf("size of bin_t is %d.\n", sizeof(bin_t));
+    if (DEBUG)
+        printf("size of Lock is %d.\n", sizeof(Lock));
+
+    cudaThreadSynchronize();
+    // assign particles to these bins
+    bin_particles(n, particles, global_bin_list, column_step, row_step, num_columns_bins);
+    cudaThreadSynchronize();
+
+    /*if (cudaMemcpy(bin_list, global_bin_list, num_bins * sizeof(bin_t), cudaMemcpyHostToDevice) == cudaSuccess)
+        printf("Success\n");
+    else
+        printf("Fail\n");*/
+    cudaMemcpy(bin_list, global_bin_list, num_bins * sizeof(bin_t), cudaMemcpyHostToDevice);
+
+    //init_bin_lock <<< bins_blks, NUM_THREADS >>> (num_bins, bin_lock);
+
+    //
+    //  simulate a number of time steps
+    //
+    cudaThreadSynchronize();
+    double simulation_time = read_timer( );
+
+    for( int step = 0; step < NSTEPS; step++ )
+    {
+        if (DEBUG) {printf("step = %d\n", step);}
+
+        //  compute forces
+        cudaThreadSynchronize();
+        compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, n, num_rows_bins, num_columns_bins, bin_list, column_step, row_step);
+        //if (DEBUG) {printf("compute_forces_gpu\n");}
+
+        //
+        //  move particles
+        //
+
+        //move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
+
+
+        // reassign particles to bins
+        cudaThreadSynchronize();
+        assign_particles <<< blks, NUM_THREADS >>> (d_particles, n, num_rows_bins, num_columns_bins, bin_list, column_step, row_step, bin_lock, size);
+
+        //init_bin_lock <<< bins_blks, NUM_THREADS >>> (num_bins, bin_lock);
+        //cudaThreadSynchronize();
+
+        //if (DEBUG) {printf("assign_particles\n");}
+
+        //cudaThreadSynchronize();
+        //
+        //  save if necessary
+        //
+        if( fsave && (step%SAVEFREQ) == 0 )
+        {
+            // Copy the particles back to the CPU
+            cudaThreadSynchronize();
+            cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
+            save( fsave, n, particles);
+        }
+    }
+    cudaThreadSynchronize();
+    simulation_time = read_timer( ) - simulation_time;
+
+    printf( "CPU-GPU copy time = %g seconds\n", copy_time);
+    printf( "n = %d, simulation time = %g seconds\n", n, simulation_time );
+
+    if (DEBUG)
+    {
+        printf("particle 1: %lf, %lf\n", particles[1].x, particles[1].y);
+        printf("particle 2: %lf, %lf\n", particles[2].x, particles[2].y);
+        printf("particle 3: %lf, %lf\n", particles[3].x, particles[3].y);
+        printf("particle 4: %lf, %lf\n", particles[4].x, particles[4].y);
+    }
+
+    clear_grid <<< bins_blks, NUM_THREADS >>> (num_bins, bin_list);
+    free( particles );
+    free( global_bin_list );
+    cudaFree(d_particles);
+    cudaFree(bin_list);
+    cudaFree(bin_lock);
+    if( fsave )
+        fclose( fsave );
+
+    return 0;
+}
