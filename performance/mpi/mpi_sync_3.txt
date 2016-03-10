@@ -1,0 +1,266 @@
+CrayPat/X:  Version 6.3.1 Revision 3aa972a  11/18/15 15:29:55
+
+Number of PEs (MPI ranks):    3
+                           
+Numbers of PEs per Node:      1  PE on each of  3  Nodes
+                           
+Numbers of Threads per PE:    1
+                           
+Number of Cores per Socket:  16
+
+Execution start time:  Wed Mar  9 16:11:12 2016
+
+System name and speed:  cori12  2301 MHz (approx)
+
+Current path to data file:
+  /global/homes/j/jwxiao/cs267/hw2/CS267_HW2_RUOCHEN/mpi+pat+58848-44t.ap2  (RTS)
+
+
+Notes for table 1:
+
+  Table option:
+    -O profile
+  Options implied by table option:
+    -d ti%@0.95,ti,imb_ti,imb_ti%,tr -b gr,fu,pe=HIDE
+
+  Options for related tables:
+    -O profile_pe.th           -O profile_th_pe       
+    -O profile+src             -O load_balance        
+    -O callers                 -O callers+src         
+    -O calltree                -O calltree+src        
+
+  The Total value for Time, Calls is the sum for the Group values.
+  The Group value for Time, Calls is the sum for the Function values.
+  The Function value for Time, Calls is the avg for the PE values.
+    (To specify different aggregations, see: pat_help report options s1)
+
+  This table shows only lines with Time% > 0.95.
+    (To set thresholds to zero, specify:  -T)
+
+  Imbalance percentages are relative to a set of threads or PEs.
+  Other percentages at each level are of the Total for the program.
+    (For percentages relative to next level up, specify:
+      -s percent=r[elative])
+
+Table 1:  Profile by Function Group and Function
+
+  Time% |      Time |     Imb. |  Imb. |         Calls |Group
+        |           |     Time | Time% |               | Function
+        |           |          |       |               |  PE=HIDE
+       
+ 100.0% | 21.249807 |       -- |    -- | 123,017,037.0 |Total
+|------------------------------------------------------------------------
+|  90.6% | 19.244843 |       -- |    -- | 122,477,140.3 |USER
+||-----------------------------------------------------------------------
+||  88.8% | 18.865157 | 1.214824 |  9.1% |           1.0 |main
+||   1.7% |  0.363565 | 0.024932 |  9.6% | 118,805,237.3 |apply_force
+||=======================================================================
+|   5.9% |  1.260332 |       -- |    -- |     538,893.7 |MPI
+||-----------------------------------------------------------------------
+||   4.9% |  1.051623 | 0.601307 | 54.6% |     268,943.3 |MPI_Recv
+||=======================================================================
+|   3.5% |  0.744632 |       -- |    -- |       1,003.0 |MPI_SYNC
+||-----------------------------------------------------------------------
+||   3.5% |  0.744093 | 0.722572 | 97.1% |       1,000.0 |MPI_Barrier(sync)
+|========================================================================
+
+Notes for table 2:
+
+  Table option:
+    -O load_balance_m
+  Options implied by table option:
+    -d ti%@0.95,ti,Mc,Mm,Mz -b gr,pe
+
+  Options for related tables:
+    -O load_balance_sm         -O load_balance_cm     
+
+  The Total value for each data item is the sum for the Group values.
+  The Group value for each data item is the avg for the PE values.
+    (To specify different aggregations, see: pat_help report options s1)
+
+  This table shows only lines with Time% > 0.95.
+    (To set thresholds to zero, specify:  -T)
+
+  Percentages at each level are of the Total for the program.
+    (For percentages relative to next level up, specify:
+      -s percent=r[elative])
+
+Table 2:  Load Balance with MPI Message Stats
+
+  Time% |      Time |   MPI Msg |      MPI Msg |   Avg |Group
+        |           |     Count |        Bytes |   MPI | PE
+        |           |           |              |   Msg |
+        |           |           |              |  Size |
+       
+ 100.0% | 14.507588 | 268,944.3 | 13,325,280.0 | 49.55 |Total
+|---------------------------------------------------------------
+|  86.2% | 12.502625 |       0.0 |          0.0 |    -- |USER
+||--------------------------------------------------------------
+||  91.7% | 13.298800 |       0.0 |          0.0 |    -- |pe.2
+||  85.8% | 12.445742 |       0.0 |          0.0 |    -- |pe.1
+||  81.1% | 11.763332 |       0.0 |          0.0 |    -- |pe.0
+||==============================================================
+|   8.7% |  1.260332 | 268,944.3 | 13,325,280.0 | 49.55 |MPI
+||--------------------------------------------------------------
+||  13.5% |  1.963588 | 406,145.0 | 19,878,912.0 | 48.95 |pe.1
+||  10.6% |  1.542259 | 199,481.0 | 10,007,040.0 | 50.17 |pe.0
+||   1.9% |  0.275148 | 201,207.0 | 10,089,888.0 | 50.15 |pe.2
+||==============================================================
+|   5.1% |  0.744632 |       0.0 |          0.0 |    -- |MPI_SYNC
+||--------------------------------------------------------------
+||  13.9% |  2.021732 |       0.0 |          0.0 |    -- |pe.0
+||   1.3% |  0.189616 |       0.0 |          0.0 |    -- |pe.1
+||   0.2% |  0.022547 |       0.0 |          0.0 |    -- |pe.2
+|===============================================================
+
+Notes for table 3:
+
+  Table option:
+    -O mpi_callers
+  Options implied by table option:
+    -d Mm%@0.95,Mm,Mc@,Mb -b fu,ca,pe
+
+  Options for related tables:
+    -O mpi_sm_callers          -O mpi_coll_callers    
+    -O mpi_recv_callers    
+
+  The Total value for each data item is the sum for the Function values.
+  The Function value for each data item is the sum for the Caller values.
+  The Caller value for each data item is the avg for the PE values.
+    (To specify different aggregations, see: pat_help report options s1)
+
+  This table shows only lines with:
+    MPI Msg Bytes% > 0.95
+    MPI Msg Count > 0
+    (To set thresholds to zero, specify:  -T)
+
+  Percentages at each level are of the Total for the program.
+    (For percentages relative to next level up, specify:
+      -s percent=r[elative])
+
+Table 3:  MPI Message Stats by Caller
+
+    MPI |      MPI Msg |   MPI Msg |   MsgSz |      16<= | 64KiB<= |Function
+    Msg |        Bytes |     Count |     <16 |     MsgSz |   MsgSz | Caller
+ Bytes% |              |           |   Count |      <256 |   <1MiB |  PE
+        |              |           |         |     Count |   Count |
+       
+ 100.0% | 13,325,280.0 | 268,944.3 | 1,333.3 | 267,610.0 |     1.0 |Total
+|----------------------------------------------------------------------------
+|  96.4% | 12,845,280.0 | 268,943.3 | 1,333.3 | 267,610.0 |     0.0 |MPI_Isend
+|        |              |           |         |           |         | main
+|||--------------------------------------------------------------------------
+3|| 145.6% | 19,398,912.0 | 406,144.0 | 2,000.0 | 404,144.0 |     0.0 |pe.1
+3||  72.1% |  9,609,888.0 | 201,206.0 | 1,000.0 | 200,206.0 |     0.0 |pe.2
+3||  71.5% |  9,527,040.0 | 199,480.0 | 1,000.0 | 198,480.0 |     0.0 |pe.0
+|||==========================================================================
+|   3.6% |    480,000.0 |       1.0 |     0.0 |       0.0 |     1.0 |MPI_Bcast
+|        |              |           |         |           |         | main
+|||--------------------------------------------------------------------------
+3||   3.6% |    480,000.0 |       1.0 |     0.0 |       0.0 |     1.0 |pe.0
+3||   3.6% |    480,000.0 |       1.0 |     0.0 |       0.0 |     1.0 |pe.1
+3||   3.6% |    480,000.0 |       1.0 |     0.0 |       0.0 |     1.0 |pe.2
+|============================================================================
+
+Notes for table 4:
+
+  Table option:
+    -O program_time
+  Options implied by table option:
+    -d pt,hm -b pe
+
+  The Total value for Process HiMem (MBytes), Process Time is the avg for the PE values.
+    (To specify different aggregations, see: pat_help report options s1)
+
+  The value shown for Process HiMem is calculated from information in
+  the /proc/self/numa_maps files captured near the end of the program. 
+  It is the total size of all pages, including huge pages, that were
+  actually mapped into physical memory from both private and shared
+  memory segments.
+
+Table 4:  Wall Clock Time, Memory High Water Mark
+
+   Process |  Process |PE
+      Time |    HiMem |
+           | (MBytes) |
+          
+ 28.495422 |   258.27 |Total
+|---------------------------
+| 28.496657 |   379.71 |pe.1
+| 28.495001 |   196.64 |pe.0
+| 28.494609 |   198.45 |pe.2
+|===========================
+
+========================  Additional details  ========================
+
+Experiment:  trace
+
+Original path to data file:
+  /global/u1/j/jwxiao/cs267/hw2/CS267_HW2_RUOCHEN/mpi+pat+58848-44t/000000.xf  (RTS)
+
+Original program:  /global/u1/j/jwxiao/cs267/hw2/CS267_HW2_RUOCHEN/mpi
+
+Instrumented with:  pat_build -g mpi -u mpi
+
+Instrumented program:
+  /global/u1/j/jwxiao/cs267/hw2/CS267_HW2_RUOCHEN/./mpi+pat
+
+Program invocation:
+  /global/u1/j/jwxiao/cs267/hw2/CS267_HW2_RUOCHEN/./mpi+pat -n 10000 -no
+
+Exit Status:  0 for 3 PEs
+
+Intel haswell CPU  Family:  6  Model: 63  Stepping:  2
+
+Memory pagesize:  4 KiB
+
+Memory hugepagesize:  0 B
+
+Programming environment:  INTEL
+
+Runtime environment variables:
+  ATP_HOME=/opt/cray/atp/1.8.3
+  ATP_IGNORE_SIGTERM=1
+  ATP_MRNET_COMM_PATH=/opt/cray/atp/1.8.3/libexec/atp_mrnet_commnode_wrapper
+  ATP_POST_LINK_OPTS=-Wl,-L/opt/cray/atp/1.8.3/libApp/ 
+  CRAYOS_VERSION=5.2.82
+  CRAYPE_VERSION=2.5.1
+  CRAY_LIBSCI_VERSION=9000
+  DVS_VERSION=0.9.0
+  INTEL_MAJOR_VERSION=16.0
+  INTEL_MINOR_VERSION=0.109
+  INTEL_VERSION=16.0.0.109
+  LIBSCI_VERSION=9000
+  MODULE_VERSION=3.2.10.3
+  MODULE_VERSION_STACK=3.2.10.3
+  MPICH_ABORT_ON_ERROR=1
+  MPICH_DIR=/opt/cray/mpt/7.3.1/gni/mpich-intel/14.0
+  MPICH_MPIIO_DVS_MAXNODES=32
+  PATH=/opt/cray/perftools/6.3.1/bin:/opt/cray/papi/5.4.1.3/bin:/usr/common/usg/bin:/usr/common/mss/bin:/usr/common/nsg/bin:/opt/slurm/default/bin:/opt/cray/mpt/7.3.1/gni/bin:/opt/cray/rca/1.0.0-2.0502.60530.1.62.ari/bin:/opt/cray/alps/5.2.4-2.0502.9774.31.11.ari/sbin:/opt/cray/dvs/2.5_0.9.0-1.0502.2188.1.116.ari/bin:/opt/cray/xpmem/0.1-2.0502.64982.5.3.ari/bin:/opt/cray/pmi/5.0.10-1.0000.11050.0.0.ari/bin:/opt/cray/ugni/6.0-1.0502.10863.8.29.ari/bin:/opt/cray/udreg/2.3.2-1.0502.10518.2.17.ari/bin:/opt/cray/craype/2.5.1/bin:/opt/intel/parallel_studio_xe_2016.0.047/compilers_and_libraries_2016.0.109/linux/bin/intel64:/opt/cray/switch/1.0-1.0502.60522.1.61.ari/bin:/opt/cray/eslogin/eswrap/1.1.0-1.020200.1231.0/bin:/opt/modules/3.2.10.3/bin:/usr/syscom/nsg/sbin:/usr/syscom/nsg/bin:/usr/local/bin:/usr/bin:/bin:/usr/bin/X11:/usr/X11R6/bin:/usr/games:/usr/lib/mit/bin:/usr/lib/mit/sbin:/sbin:/usr/sbin:/usr/lib/qt3/bin:/opt/cray/bin
+  PAT_BUILD_PAPI_BASEDIR=/opt/cray/papi/5.4.1.3
+  PAT_REPORT_PRUNE_NAME=_cray$mt_start_,__cray_hwpc_,f_cray_hwpc_,cstart,__pat_,pat_region_,PAT_,OMP.slave_loop,slave_entry,_new_slave_entry,__libc_start_main,_start,__start,start_thread,__wrap_,UPC_ADIO_,_upc_,upc_,__caf_,__pgas_,syscall
+  PERFTOOLS_VERSION=6.3.1
+  XTOS_VERSION=5.2.82
+
+Report time environment variables:
+    CRAYPAT_ROOT=/opt/cray/perftools/6.3.1
+    PAT_REPORT_PRUNE_NAME=_cray$mt_start_,__cray_hwpc_,f_cray_hwpc_,cstart,__pat_,pat_region_,PAT_,OMP.slave_loop,slave_entry,_new_slave_entry,__libc_start_main,_start,__start,start_thread,__wrap_,UPC_ADIO_,_upc_,upc_,__caf_,__pgas_,syscall
+
+Number of MPI control variables collected:  80
+
+  (To see the list, specify: -s mpi_cvar=show)
+
+Report command line options:  <none>
+
+Operating system:
+  Linux 3.0.101-0.46.1_1.0502.8871-cray_ari_c #1 SMP Tue Aug 25 21:41:26 UTC 2015
+
+Estimated minimum overhead per call of a traced function,
+  which was subtracted from the data shown in this report
+  (for raw data, use the option:  -s overhead=include):
+    Time  0.113  microsecs
+
+Number of traced functions:  128
+
+  (To see the list, specify:  -s traced_functions=show)
+
