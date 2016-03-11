@@ -123,7 +123,6 @@ int main( int argc, char **argv )
         dmin = 1.0;
         davg = 0.0;
         
-        MPI_Barrier(MPI_COMM_WORLD);
         //
         //  save current step if necessary (slightly different semantics than in other codes)
         //
@@ -302,7 +301,7 @@ int main( int argc, char **argv )
             if (rdmin < absmin) absmin = rdmin;
           }
         }
-       
+        MPI_Barrier(MPI_COMM_WORLD);    
     }
     simulation_time = read_timer( ) - simulation_time;
   
