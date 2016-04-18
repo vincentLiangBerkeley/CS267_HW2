@@ -6,7 +6,7 @@
 #include "bin.h"
 
 #define DEBUG 0
-#define A_FLAG 0
+#define A_FLAG 1
 #define RANK 0
 #define D_FLAG DEBUG && rank == RANK
 #define DIETAG 1000000
@@ -87,13 +87,14 @@ int main( int argc, char **argv )
     MPI_Bcast(particles, n, PARTICLE, 0, MPI_COMM_WORLD);
 
     // Set up bin sizes
-    int bin_i, bin_j, num_bins = n % 4 == 0 ? n/4:n/4+1;
+    int m = n / 100 * 100;
+    int bin_i, bin_j, num_bins = m / 4;
     bin_t *bin_list = (bin_t*) malloc(num_bins * sizeof(bin_t));
-    if (D_FLAG) printf("Testing initializing bins: \n");
+    if (A_FLAG) printf("Testing initializing bins: \n");
     set_grid_size(bin_i, bin_j, num_bins);
-    if (D_FLAG) printf("There are %d bins, %d per row with %d rows.\n", num_bins, bin_i, bin_j);
+    if (A_FLAG) printf("There are %d bins, %d per row with %d rows.\n", num_bins, bin_i, bin_j);
     double bin_x = grid_size / bin_i, bin_y = grid_size / bin_j;
-    if (D_FLAG) printf("The bins are of size %f by %f, err = %f\n", bin_y, bin_x, bin_x*bin_y*num_bins - grid_size*grid_size);
+    if (A_FLAG) printf("The bins are of size %f by %f, err = %f\n", bin_y, bin_x, bin_x*bin_y*num_bins - grid_size*grid_size);
     init_grid(num_bins, bin_list);
     bin_particles(n, particles, num_bins, bin_list, bin_x, bin_y, bin_j);
 
