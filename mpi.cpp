@@ -6,7 +6,7 @@
 #include "bin.h"
 
 #define DEBUG 0
-#define A_FLAG 1
+#define A_FLAG 0
 #define RANK 0
 #define D_FLAG DEBUG && rank == RANK
 #define DIETAG 1000000
@@ -87,7 +87,7 @@ int main( int argc, char **argv )
     MPI_Bcast(particles, n, PARTICLE, 0, MPI_COMM_WORLD);
 
     // Set up bin sizes
-    int m = n / 100 * 100;
+    int m = (n / 100 + 1) * 100;
     int bin_i, bin_j, num_bins = m / 4;
     bin_t *bin_list = (bin_t*) malloc(num_bins * sizeof(bin_t));
     if (A_FLAG) printf("Testing initializing bins: \n");
